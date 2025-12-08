@@ -80,7 +80,6 @@ fun TimerScreen(onRecordAdd: (String) -> Unit) {
     var totalTime by remember { mutableStateOf(0) }
     var isRunning by remember { mutableStateOf(false) }
 
-    // 반복 기능
     var repeatCount by remember { mutableStateOf("0") }
     var repeatRemaining by remember { mutableStateOf(0) }
     var isRepeatMode by remember { mutableStateOf(false) }
@@ -101,8 +100,6 @@ fun TimerScreen(onRecordAdd: (String) -> Unit) {
                 (restMinutes.toIntOrNull() ?: 0) * 60 +
                 (restSeconds.toIntOrNull() ?: 0)
 
-    // 🔥 반복 = "라운드 1개" (집중 or 휴식 하나 끝날 때마다 반복 1 감소)
-    //     반복 2라면 → 집중2 + 휴식2 = 총 4라운드
     LaunchedEffect(isRunning) {
         while (isRunning) {
             delay(1000)
@@ -110,28 +107,25 @@ fun TimerScreen(onRecordAdd: (String) -> Unit) {
 
             if (remainingTime <= 0) {
 
-                // 기록 저장
-                val modeText = if (isFocusMode) "집중" else "휴식"
-                onRecordAdd(makeRecord(modeText, totalTime))
+
+                if (isFocusMode) {
+                    val modeText = "집중"
+                    onRecordAdd(makeRecord(modeText, totalTime))
+                }
 
                 if (isRepeatMode) {
-
-                    // 🔥 라운드 1개 종료 → repeatRemaining 1 감소
                     repeatRemaining--
 
                     if (repeatRemaining > 0) {
-                        // 다음 라운드로 모드 전환
                         isFocusMode = !isFocusMode
                         totalTime = if (isFocusMode) getFocusSeconds() else getRestSeconds()
                         remainingTime = totalTime
                     } else {
-                        // 반복 끝
                         isRunning = false
                         isRepeatMode = false
                     }
 
                 } else {
-                    // 일반 모드 종료
                     isRunning = false
                 }
             }
@@ -254,8 +248,9 @@ fun TimerScreen(onRecordAdd: (String) -> Unit) {
             }) { Text("시작") }
 
             Button(onClick = {
-                if (remainingTime < totalTime && remainingTime > 0) {
-                    val modeText = if (isFocusMode) "집중" else "휴식"
+
+                if (remainingTime < totalTime && remainingTime > 0 && isFocusMode) {
+                    val modeText = "집중"
                     val elapsed = totalTime - remainingTime
                     onRecordAdd(makeRecord(modeText, elapsed))
                 }
@@ -263,7 +258,6 @@ fun TimerScreen(onRecordAdd: (String) -> Unit) {
                 isRepeatMode = false
             }) { Text("중단") }
 
-            // 🔥 반복 시작: 라운드 = 반복 수 * 2 (집중 + 휴식)
             Button(onClick = {
                 val r = (repeatCount.toIntOrNull() ?: 0)
                 if (r > 0) {
@@ -339,4 +333,3 @@ fun formatTime(totalSeconds: Int): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d:%02d", hours, minutes, seconds)
 }
-//ab
