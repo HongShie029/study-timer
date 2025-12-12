@@ -39,6 +39,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.material3.IconButton
 
 
 // -------------------------------
@@ -89,7 +92,7 @@ fun StudyTimerApp() {
     var isRunning by remember { mutableStateOf(false) }
 
     // 반복 관련 상태
-    var repeatCount by remember { mutableStateOf("0") }
+    var repeatCount by remember { mutableStateOf("1") }
     var repeatRemaining by remember { mutableStateOf(0) } // 내부 카운트(집중/휴식 토글 단위)
     var isRepeatMode by remember { mutableStateOf(false) }
 
@@ -161,24 +164,20 @@ fun StudyTimerApp() {
 
     // ========== UI (버튼으로 화면 전환) ==========
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly
-        ) {
-            Button(onClick = { currentScreen = "timer" }) { Text("타이머") }
-            Button(onClick = { currentScreen = "record" }) { Text("기록") }
-        }
 
+        // 화면 컨텐츠: 하단 버튼을 위해 남는 공간만 차지하도록 weight 사용
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             when (currentScreen) {
+                "profile" -> {
+                    ProfileScreen()
+                }
+
                 "timer" -> {
-                    // TimerScreen에게 **모든 상태와 setter**를 전달
-                    // (두 번째 조각에서 TimerScreen의 시그니처와 구현을 그대로 보낼게요)
                     TimerScreen(
                         isFocusMode = isFocusMode,
                         onFocusModeChange = { isFocusMode = it },
@@ -211,79 +210,90 @@ fun StudyTimerApp() {
                         isRepeatMode = isRepeatMode,
                         setRepeatMode = { isRepeatMode = it },
                         onRequestStart = {
-                            // 시작 버튼을 눌렀을 때만 실행됨
-
                             if (remainingTime <= 0) {
-                                // ⬅ "처음 시작" 또는 "완전히 끝난 뒤"에만 시간 초기화
                                 totalTime = if (isFocusMode) getFocusSeconds() else getRestSeconds()
                                 remainingTime = totalTime
-
-                                // 반복 모드 초기화
                                 repeatRemaining = 0
                                 isRepeatMode = false
                             }
-
-                            // ⬅ 시작 버튼을 눌러야만 isRunning = true
                             isRunning = true
                         },
-
-
-                                onRequestStop = {
-                            // --- 중단(pause) ---
-                            // 집중 중이었다면 지금까지 한 시간 기록
+                        onRequestStop = {
                             if (remainingTime < totalTime && remainingTime > 0 && isFocusMode) {
                                 val elapsed = totalTime - remainingTime
                                 studyRecords.add(makeRecord("집중", elapsed))
                             }
-
-                            // 멈추기만 하고, remainingTime은 그대로 둔다
                             isRunning = false
-
-                            // ⚠ 반복 모드 끄지 않도록 변경
-                            // isRepeatMode = false   ← 지우거나 주석 처리!
                         },
-
                         onRequestRepeat = {
                             val r = repeatCount.toIntOrNull() ?: 0
                             if (r > 0) {
                                 repeatRemaining = r * 2
                                 isRepeatMode = true
-
                                 totalTime = if (isFocusMode) getFocusSeconds() else getRestSeconds()
                                 remainingTime = totalTime
                                 isRunning = true
                             }
                         },
-
                         onRequestReset = {
-                            // 타이머를 완전히 초기 상태로 돌림
                             isRunning = false
                             remainingTime = 0
                             totalTime = 0
-
-                            // 반복 관련 초기화
                             repeatRemaining = 0
                             isRepeatMode = false
                         },
+                        onRecordAdd = { record -> studyRecords.add(record) }
+                    )
+                }
 
-                        onRecordAdd = { record -> studyRecords.add(record) } ) }
-
-                // StudyTimerApp() 내부의 when 분기에서 "record" 부분 (수정된 호출부)
                 "record" -> {
                     RecordScreen(
                         records = studyRecords,
                         onBack = { currentScreen = "timer" },
                         onRecordUpdate = { idx, newTitle ->
-                            // mutableStateListOf이므로 대입으로 업데이트 (recompose 발생)
                             studyRecords[idx] = studyRecords[idx].copy(title = newTitle)
                         }
                     )
-
-
                 }
-
             }
         }
+
+        // 하단 네비게이션 바 (텍스트 버튼 → 이후 아이콘으로 바꾸기 쉬움)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // 프로필 버튼
+            Image(
+                painter = painterResource(id = R.drawable.download),
+                contentDescription = "프로필",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { currentScreen = "profile" }
+            )
+
+            // 타이머 버튼
+            Image(
+                painter = painterResource(id = R.drawable.download),
+                contentDescription = "타이머",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { currentScreen = "timer" }
+            )
+
+            // 기록 버튼
+            Image(
+                painter = painterResource(id = R.drawable.download),
+                contentDescription = "기록",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { currentScreen = "record" }
+            )
+        }
+
+
     }
 }
 
@@ -350,7 +360,7 @@ fun TimerScreen(
     // 기록 추가 (상위 리스트에 직접 추가할 수 있게)
     onRecordAdd: (StudyRecord) -> Unit
 )
- {
+{
     // 진행률 계산 (0..1)
     val progress = if (totalTime > 0) remainingTime.toFloat() / totalTime else 0f
     val circleSize = 420.dp
@@ -398,28 +408,24 @@ fun TimerScreen(
         verticalArrangement = Arrangement.Center
     ) {
         // 모드 선택 버튼 (집중 / 휴식)
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Button(
-                onClick = { onFocusModeChange(true) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isFocusMode) Color(0xFF1976D2) else Color.LightGray
-                )
-            ) { Text("집중") }
+        // 현재 모드 표시 아이콘 (눌리지 않는 표시용)
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Button(
-                onClick = { onFocusModeChange(false) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (!isFocusMode) Color(0xFF388E3C) else Color.LightGray
+        if (remainingTime > 0 || isRunning) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(
+                        id = if (isFocusMode) R.drawable.download else R.drawable.imga
+                    ),
+                    contentDescription = if (isFocusMode) "집중 모드" else "휴식 모드",
+                    modifier = Modifier.size(60.dp)
                 )
-            ) { Text("휴식") }
+            }
         }
 
         // 원형 타이머 + 내부 UI
@@ -433,53 +439,73 @@ fun TimerScreen(
                 color = if (isFocusMode) Color(0xFF2196F3) else Color(0xFF4CAF50),
                 sizeDp = circleSize
             )
-
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+// 타이머가 한 번이라도 시작된 상태일 때만 모드 아이콘 표시
+
 
                 if (isRunning || remainingTime > 0) {
+                    // 타이머 실행 중 화면
                     Text(formatTime(remainingTime), fontSize = 36.sp)
                 } else {
-                    Text(if (isFocusMode) "집중 시간 입력" else "휴식 시간 입력")
+                    // ----------------------------
+                    //  집중 + 휴식 입력을 모두 보여주는 화면
+                    // ----------------------------
 
+                    // ★ 집중시간 입력
+                    Text("집중시간", fontSize = 22.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                        // 현재 모드에 따라 입력값 바인딩
-                        val h = if (isFocusMode) focusHours else restHours
-                        val m = if (isFocusMode) focusMinutes else restMinutes
-                        val s = if (isFocusMode) focusSeconds else restSeconds
-
-                        fun updateHours(v: String) {
-                            if (isFocusMode) onFocusHoursChange(v) else onRestHoursChange(v)
-                        }
-                        fun updateMinutes(v: String) {
-                            if (isFocusMode) onFocusMinutesChange(v) else onRestMinutesChange(v)
-                        }
-                        fun updateSeconds(v: String) {
-                            if (isFocusMode) onFocusSecondsChange(v) else onRestSecondsChange(v)
-                        }
-
                         TextField(
-                            value = h,
-                            onValueChange = { updateHours(it.filter(Char::isDigit)) },
+                            value = focusHours,
+                            onValueChange = { onFocusHoursChange(it.filter(Char::isDigit)) },
                             label = { Text("시") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.width(70.dp)
                         )
 
                         TextField(
-                            value = m,
-                            onValueChange = { updateMinutes(it.filter(Char::isDigit)) },
+                            value = focusMinutes,
+                            onValueChange = { onFocusMinutesChange(it.filter(Char::isDigit)) },
                             label = { Text("분") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.width(70.dp)
                         )
 
                         TextField(
-                            value = s,
-                            onValueChange = { updateSeconds(it.filter(Char::isDigit)) },
+                            value = focusSeconds,
+                            onValueChange = { onFocusSecondsChange(it.filter(Char::isDigit)) },
+                            label = { Text("초") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(70.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // ★ 휴식시간 입력
+                    Text("휴식시간", fontSize = 22.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextField(
+                            value = restHours,
+                            onValueChange = { onRestHoursChange(it.filter(Char::isDigit)) },
+                            label = { Text("시") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(70.dp)
+                        )
+
+                        TextField(
+                            value = restMinutes,
+                            onValueChange = { onRestMinutesChange(it.filter(Char::isDigit)) },
+                            label = { Text("분") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(70.dp)
+                        )
+
+                        TextField(
+                            value = restSeconds,
+                            onValueChange = { onRestSecondsChange(it.filter(Char::isDigit)) },
                             label = { Text("초") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.width(70.dp)
@@ -487,14 +513,44 @@ fun TimerScreen(
                     }
                 }
             }
+
+
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 반복 수 입력
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 버튼
+            IconButton(onClick = { onRequestReset() }) {
+                Image(
+                    painter = painterResource(id = R.drawable.download),
+                    contentDescription = "리셋"
+                )
+            }
+
+            // 반복 버튼
+            IconButton(onClick = { onRequestRepeat() }) {
+                Image(
+                    painter = painterResource(id = R.drawable.download),
+                    contentDescription = "반복"
+                )
+            }
+
+            // 중단 버튼
+            IconButton(onClick = { onRequestStop() }) {
+                Image(
+                    painter = painterResource(id = R.drawable.download),
+                    contentDescription = "중단"
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // 반복 수 입력
             Text("반복 수:")
-            Spacer(modifier = Modifier.width(8.dp))
             TextField(
                 value = repeatCount,
                 onValueChange = { onRepeatCountChange(it.filter(Char::isDigit)) },
@@ -503,19 +559,11 @@ fun TimerScreen(
             )
         }
 
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // 제어 버튼들 (시작 / 중단 / 반복 / 리셋)
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
 
-            Button(onClick = { onRequestStart() }) { Text("시작") }
-
-            Button(onClick = { onRequestStop() }) { Text("중단") }
-
-            Button(onClick = { onRequestRepeat() }) { Text("반복") }
-
-            Button(onClick = { onRequestReset() }) { Text("리셋") }
-        }
     }
 }
 
@@ -645,8 +693,18 @@ fun RecordScreen(
     }
 }
 
+@Composable
+fun ProfileScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("프로필 화면", fontSize = 24.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("여기에 프로필 정보를 표시하세요.")
+    }
+}
 
 
-// ------------------------------------------------------------
-//  시간 포맷팅 유틸 — TimerScreen 에서 호출
-// ------------------------------------------------------------
+
