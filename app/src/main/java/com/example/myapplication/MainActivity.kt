@@ -41,12 +41,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
 
 
-// -------------------------------
-// MainActivity: 앱 시작점 (변경 없음)
-// -------------------------------
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,11 +73,6 @@ data class StudyRecord(
 
 
 
-// ------------------------------------------------------------
-// StudyTimerApp: 타이머 관련 모든 상태를 호이스팅(상위로 올림)
-//  - 화면 전환과 무관하게 타이머가 계속 동작하도록 함
-//  - TimerScreen, RecordScreen에게 필요한 상태 / setter 들을 전달
-// ------------------------------------------------------------
 @Composable
 fun StudyTimerApp() {
     // 화면 전환 상태 (timer / record)
@@ -252,9 +256,13 @@ fun StudyTimerApp() {
                         onBack = { currentScreen = "timer" },
                         onRecordUpdate = { idx, newTitle ->
                             studyRecords[idx] = studyRecords[idx].copy(title = newTitle)
+                        },
+                        onRecordDelete = { idx ->
+                            studyRecords.removeAt(idx)
                         }
                     )
                 }
+
             }
         }
 
@@ -267,7 +275,7 @@ fun StudyTimerApp() {
         ) {
             // 프로필 버튼
             Image(
-                painter = painterResource(id = R.drawable.download),
+                painter = painterResource(id = R.drawable.plofil),
                 contentDescription = "프로필",
                 modifier = Modifier
                     .size(48.dp)
@@ -276,7 +284,7 @@ fun StudyTimerApp() {
 
             // 타이머 버튼
             Image(
-                painter = painterResource(id = R.drawable.download),
+                painter = painterResource(id = R.drawable.timer),
                 contentDescription = "타이머",
                 modifier = Modifier
                     .size(48.dp)
@@ -285,7 +293,7 @@ fun StudyTimerApp() {
 
             // 기록 버튼
             Image(
-                painter = painterResource(id = R.drawable.download),
+                painter = painterResource(id = R.drawable.list),
                 contentDescription = "기록",
                 modifier = Modifier
                     .size(48.dp)
@@ -420,7 +428,7 @@ fun TimerScreen(
             ) {
                 Image(
                     painter = painterResource(
-                        id = if (isFocusMode) R.drawable.download else R.drawable.imga
+                        id = if (isFocusMode) R.drawable.book else R.drawable.game
                     ),
                     contentDescription = if (isFocusMode) "집중 모드" else "휴식 모드",
                     modifier = Modifier.size(60.dp)
@@ -523,33 +531,27 @@ fun TimerScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 버튼
-            IconButton(onClick = { onRequestReset() }) {
-                Image(
-                    painter = painterResource(id = R.drawable.download),
-                    contentDescription = "리셋"
-                )
-            }
 
-            // 반복 버튼
-            IconButton(onClick = { onRequestRepeat() }) {
-                Image(
-                    painter = painterResource(id = R.drawable.download),
-                    contentDescription = "반복"
-                )
-            }
+            SquareButton(
+                icon = R.drawable.restart,
+                desc = "리셋",
+                onClick = { onRequestReset() }
+            )
 
-            // 중단 버튼
-            IconButton(onClick = { onRequestStop() }) {
-                Image(
-                    painter = painterResource(id = R.drawable.download),
-                    contentDescription = "중단"
-                )
-            }
+            SquareButton(
+                icon = R.drawable.start,
+                desc = "반복",
+                onClick = { onRequestRepeat() }
+            )
+
+            SquareButton(
+                icon = R.drawable.stop,
+                desc = "중단",
+                onClick = { onRequestStop() }
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // 반복 수 입력
             Text("반복 수:")
             TextField(
                 value = repeatCount,
@@ -560,10 +562,35 @@ fun TimerScreen(
         }
 
 
+
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // 제어 버튼들 (시작 / 중단 / 반복 / 리셋)
 
+    }
+}
+
+@Composable
+fun SquareButton(
+    icon: Int,
+    desc: String,
+    size: Dp = 56.dp,
+    iconSize: Dp = 32.dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = icon),
+            contentDescription = desc,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }
 
@@ -572,10 +599,10 @@ fun TimerScreen(
 // ------------------------------------------------------------
 @Composable
 fun CircularTimer(
-    progress: Float,      // 0f ~ 1f
+    progress: Float,
     color: Color,
-    sizeDp: Dp = 300.dp,
-    strokeWidth: Dp = 20.dp
+    sizeDp: Dp = 100.dp,      // ⭐ 이 줄이 반드시 있어야 함
+    strokeWidth: Dp = 10.dp
 ) {
     Canvas(modifier = Modifier.size(sizeDp)) {
 
@@ -618,22 +645,23 @@ fun CircularTimer(
     }
 }
 
-// ------------------------------------------------------------
-//  기록 화면
-// ------------------------------------------------------------
-// RecordScreen 컴포저블 정의 (수정된 시그니처와 버튼 동작)
 @Composable
 fun RecordScreen(
     records: List<StudyRecord>,
     onBack: () -> Unit,
-    onRecordUpdate: (index: Int, newTitle: String) -> Unit
-) {
+    onRecordUpdate: (index: Int, newTitle: String) -> Unit,
+    onRecordDelete: (index: Int) -> Unit   // ✅ 추가
+)
+ {
     var editingIndex by remember { mutableStateOf<Int?>(null) }
     var editingTitle by remember { mutableStateOf("") }
+     var deleteIndex by remember { mutableStateOf<Int?>(null) }
 
-    // 총 시간 계산 (초 → 포맷)
+
+     // 총 시간 계산 (초 → 포맷)
     val totalSeconds = records.sumOf { it.elapsedSeconds }
     val totalTimeStr = formatTime(totalSeconds)
+
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -647,17 +675,37 @@ fun RecordScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .clickable {
-                            editingIndex = index
-                            editingTitle = record.title
-                        },
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text("${index + 1}. ${record.title}", fontSize = 18.sp)
                         Text("${formatTime(record.elapsedSeconds)} · ${record.timestamp}", fontSize = 12.sp)
                     }
+
+                    Row {
+                        IconButton(
+                            onClick = {
+                                editingIndex = index
+                                editingTitle = record.title
+                            }
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "수정",tint = Color.Gray)
+                        }
+
+                        IconButton(
+                            onClick = {
+                                deleteIndex = index
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "삭제",tint = Color.Gray)
+                        }
+                    }
+
                 }
             }
         }
@@ -691,20 +739,188 @@ fun RecordScreen(
             }
         )
     }
-}
+     if (deleteIndex != null) {
+         AlertDialog(
+             onDismissRequest = { deleteIndex = null },
+             title = { Text("기록 삭제") },
+             text = { Text("이 기록을 삭제하시겠습니까?") },
+             confirmButton = {
+                 Button(
+                     onClick = {
+                         deleteIndex?.let { idx ->
+                             onRecordDelete(idx)
+                         }
+                         deleteIndex = null
+                     }
+                 ) {
+                     Text("삭제")
+                 }
+             },
+             dismissButton = {
+                 Button(
+                     onClick = { deleteIndex = null }
+                 ) {
+                     Text("취소")
+                 }
+             }
+         )
+     }
+
+ }
 
 @Composable
 fun ProfileScreen() {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
     ) {
-        Text("프로필 화면", fontSize = 24.sp)
+
+        // 1️⃣ 프로필 영역
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(3f),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "프로필 영역",
+                fontSize = 20.sp
+            )
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
-        Text("여기에 프로필 정보를 표시하세요.")
+
+        // 2️⃣ 다짐 한 줄 영역
+        // 2️⃣ 다짐 한 줄 영역
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            PledgeBox()
+        }
+
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 3️⃣ Todo 리스트 영역 (화면 절반)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(4f),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Todo 리스트 영역",
+                fontSize = 18.sp
+            )
+        }
     }
 }
 
+
+@Composable
+fun PledgeBox() {
+
+    var pledgeText by rememberSaveable { mutableStateOf("") }
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    // ✅ 한글 입력 완전 대응
+    var editingText by rememberSaveable(
+        stateSaver = TextFieldValue.Saver
+    ) {
+        mutableStateOf(TextFieldValue(""))
+    }
+
+    // ⭐ 핵심: 포커스 강제 요청용
+    val focusRequester = remember { FocusRequester() }
+
+    // 📦 메인 박스
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .border(
+                width = 1.dp,
+                color = Color.LightGray,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Text(
+                text = if (pledgeText.isBlank())
+                    "오늘의 다짐 한 마디"
+                else
+                    pledgeText,
+                modifier = Modifier.weight(1f),
+                fontSize = 16.sp,
+                color = if (pledgeText.isBlank())
+                    Color.Gray
+                else
+                    Color.Black
+            )
+
+            IconButton(
+                onClick = {
+                    editingText = TextFieldValue(pledgeText)
+                    showEditDialog = true
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "다짐 수정",
+                    tint = Color.Gray
+                )
+            }
+        }
+    }
+
+    if (showEditDialog) {
+
+        // ⭐ 다이얼로그가 뜨는 순간 포커스 요청
+        LaunchedEffect(showEditDialog) {
+            focusRequester.requestFocus()
+        }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("오늘의 다짐 수정") },
+            text = {
+                TextField(
+                    value = editingText,
+                    onValueChange = { editingText = it },
+                    placeholder = { Text("오늘의 다짐 한 마디") },
+                    singleLine = true,
+                    modifier = Modifier.focusRequester(focusRequester)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pledgeText = editingText.text
+                        showEditDialog = false
+                    }
+                ) {
+                    Text("저장")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showEditDialog = false }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+}
 
 
