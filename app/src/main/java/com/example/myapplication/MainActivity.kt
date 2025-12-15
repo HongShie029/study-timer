@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,14 +45,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.runtime.*
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
 
 
 class MainActivity : ComponentActivity() {
@@ -70,18 +72,21 @@ data class StudyRecord(
     val elapsedSeconds: Int,
     val timestamp: String
 )
+data class TodoItem(
+    val id: Int,
+    val text: String,
+    val completed: Boolean = false
+)
+
 
 
 
 @Composable
 fun StudyTimerApp() {
-    // 화면 전환 상태 (timer / record)
     var currentScreen by remember { mutableStateOf("timer") }
 
-    // ========== 타이머 관련 상태 (모두 여기로 옮김) ==========
     var isFocusMode by remember { mutableStateOf(true) }
 
-    // 사용자 입력 (문자열 상태 유지)
     var focusHours by remember { mutableStateOf("0") }
     var focusMinutes by remember { mutableStateOf("0") }
     var focusSeconds by remember { mutableStateOf("0") }
@@ -90,20 +95,16 @@ fun StudyTimerApp() {
     var restMinutes by remember { mutableStateOf("0") }
     var restSeconds by remember { mutableStateOf("0") }
 
-    // 실행 관련 상태
-    var remainingTime by remember { mutableStateOf(0) } // 남은 초
-    var totalTime by remember { mutableStateOf(0) }     // 현재 사이클의 전체 초
+    var remainingTime by remember { mutableStateOf(0) }
+    var totalTime by remember { mutableStateOf(0) }
     var isRunning by remember { mutableStateOf(false) }
 
-    // 반복 관련 상태
     var repeatCount by remember { mutableStateOf("1") }
-    var repeatRemaining by remember { mutableStateOf(0) } // 내부 카운트(집중/휴식 토글 단위)
+    var repeatRemaining by remember { mutableStateOf(0) }
     var isRepeatMode by remember { mutableStateOf(false) }
 
-    // 기존: val studyRecords = remember { mutableStateListOf<String>() }
     val studyRecords = remember { mutableStateListOf<StudyRecord>() }
 
-    // 보조: 입력값을 초로 변환하는 함수들
     fun getFocusSeconds(): Int =
         (focusHours.toIntOrNull() ?: 0) * 3600 +
                 (focusMinutes.toIntOrNull() ?: 0) * 60 +
@@ -114,19 +115,16 @@ fun StudyTimerApp() {
                 (restMinutes.toIntOrNull() ?: 0) * 60 +
                 (restSeconds.toIntOrNull() ?: 0)
 
-    // 기록 문자열 생성 (formatTime 보조 함수는 파일 하단에 있음)
-    // 기존 fun makeRecord(...) 대신 이 함수를 넣으세요
     fun makeRecord(modeText: String, seconds: Int): StudyRecord {
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         return StudyRecord(
-            title = modeText,         // 기본 제목은 modeText (예: "집중")
-            elapsedSeconds = seconds, // 초 단위 경과 시간
+            title = modeText,
+            elapsedSeconds = seconds,
             timestamp = timestamp
         )
     }
 
 
-    // ========== 타이머 동작: 화면과 무관하게 동작하도록 여기에서 처리 ==========
     LaunchedEffect(isRunning) {
         // 이 루프는 isRunning이 true일 때만 동작
         while (isRunning) {
@@ -775,6 +773,12 @@ fun ProfileScreen() {
             .fillMaxSize()
             .padding(24.dp)
     ) {
+        var todoList by remember { mutableStateOf(emptyList<TodoItem>()) }
+        var editingTodoId by remember { mutableStateOf<Int?>(null) }
+        var editingTodoText by remember { mutableStateOf("") }
+
+
+        var newTodoText by remember { mutableStateOf("") }
 
         // 1️⃣ 프로필 영역
         Box(
@@ -783,11 +787,42 @@ fun ProfileScreen() {
                 .weight(3f),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "프로필 영역",
-                fontSize = 20.sp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+
+                // 📸 프로필 사진
+                Image(
+                    painter = painterResource(id = R.drawable.plofil),
+                    contentDescription = "프로필 사진",
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(36.dp))
+                )
+
+                // 👤 이름 + 날짜
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "사용자 이름",
+                        fontSize = 20.sp
+                    )
+
+                    Text(
+                        text = SimpleDateFormat(
+                            "yyyy.MM.dd",
+                            Locale.getDefault()
+                        ).format(Date()),
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
         }
+
+
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -806,121 +841,230 @@ fun ProfileScreen() {
         Spacer(modifier = Modifier.height(12.dp))
 
         // 3️⃣ Todo 리스트 영역 (화면 절반)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(12f)
+                .padding(16.dp)
+        ) {
+            Text("Todo 리스트", fontSize = 20.sp)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 입력창
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = newTodoText,
+                    onValueChange = { newTodoText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("할 일 입력") }
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = {
+                        if (newTodoText.isNotBlank()) {
+                            todoList = todoList + TodoItem(
+                                id = (todoList.maxOfOrNull { it.id } ?: 0) + 1,
+                                text = newTodoText
+                            )
+
+                            newTodoText = ""
+                        }
+                    }
+                ) {
+                    Text("추가")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 리스트
+            // 리스트 (스크롤 가능)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            )
+            {
+                items(todoList) { todo ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = todo.completed,
+                            onCheckedChange = { checked ->
+                                todoList = todoList.map {
+                                    if (it.id == todo.id)
+                                        it.copy(completed = checked)
+                                    else it
+                                }
+                            }
+                        )
+
+                        Text(
+                            text = todo.text,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        TextButton(onClick = {
+                            editingTodoId = todo.id
+                            editingTodoText = todo.text
+                        }) {
+                            Text("수정")
+                        }
+
+                        TextButton(onClick = {
+                            todoList = todoList.filter { it.id != todo.id }
+                        }) {
+                            Text("삭제")
+                        }
+                    }
+                }
+            }
+            if (editingTodoId != null) {
+                AlertDialog(
+                    onDismissRequest = { editingTodoId = null },
+                    title = { Text("할 일 수정") },
+                    text = {
+                        TextField(
+                            value = editingTodoText,
+                            onValueChange = { editingTodoText = it }
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            todoList = todoList.map {
+                                if (it.id == editingTodoId)
+                                    it.copy(text = editingTodoText)
+                                else it
+                            }
+                            editingTodoId = null
+                        }) {
+                            Text("저장")
+                        }
+                    },
+                    dismissButton = {
+                        Button(onClick = { editingTodoId = null }) {
+                            Text("취소")
+                        }
+                    }
+                )
+            }
+
+
+        }
+    }
+    }
+
+
+    @Composable
+    fun PledgeBox() {
+
+        var pledgeText by rememberSaveable { mutableStateOf("") }
+        var showEditDialog by remember { mutableStateOf(false) }
+
+
+        // ✅ 한글 입력 완전 대응
+        var editingText by rememberSaveable(
+            stateSaver = TextFieldValue.Saver
+        ) {
+            mutableStateOf(TextFieldValue(""))
+        }
+
+        // ⭐ 핵심: 포커스 강제 요청용
+        val focusRequester = remember { FocusRequester() }
+
+        // 📦 메인 박스
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(4f),
-            contentAlignment = Alignment.Center
+                .height(48.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color.LightGray,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Text(
-                text = "Todo 리스트 영역",
-                fontSize = 18.sp
-            )
-        }
-    }
-}
-
-
-@Composable
-fun PledgeBox() {
-
-    var pledgeText by rememberSaveable { mutableStateOf("") }
-    var showEditDialog by remember { mutableStateOf(false) }
-
-    // ✅ 한글 입력 완전 대응
-    var editingText by rememberSaveable(
-        stateSaver = TextFieldValue.Saver
-    ) {
-        mutableStateOf(TextFieldValue(""))
-    }
-
-    // ⭐ 핵심: 포커스 강제 요청용
-    val focusRequester = remember { FocusRequester() }
-
-    // 📦 메인 박스
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .border(
-                width = 1.dp,
-                color = Color.LightGray,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            Text(
-                text = if (pledgeText.isBlank())
-                    "오늘의 다짐 한 마디"
-                else
-                    pledgeText,
-                modifier = Modifier.weight(1f),
-                fontSize = 16.sp,
-                color = if (pledgeText.isBlank())
-                    Color.Gray
-                else
-                    Color.Black
-            )
-
-            IconButton(
-                onClick = {
-                    editingText = TextFieldValue(pledgeText)
-                    showEditDialog = true
-                }
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "다짐 수정",
-                    tint = Color.Gray
+
+                Text(
+                    text = if (pledgeText.isBlank())
+                        "오늘의 다짐 한 마디"
+                    else
+                        pledgeText,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 16.sp,
+                    color = if (pledgeText.isBlank())
+                        Color.Gray
+                    else
+                        Color.Black
                 )
-            }
-        }
-    }
 
-    if (showEditDialog) {
-
-        // ⭐ 다이얼로그가 뜨는 순간 포커스 요청
-        LaunchedEffect(showEditDialog) {
-            focusRequester.requestFocus()
-        }
-
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("오늘의 다짐 수정") },
-            text = {
-                TextField(
-                    value = editingText,
-                    onValueChange = { editingText = it },
-                    placeholder = { Text("오늘의 다짐 한 마디") },
-                    singleLine = true,
-                    modifier = Modifier.focusRequester(focusRequester)
-                )
-            },
-            confirmButton = {
-                Button(
+                IconButton(
                     onClick = {
-                        pledgeText = editingText.text
-                        showEditDialog = false
+                        editingText = TextFieldValue(pledgeText)
+                        showEditDialog = true
                     }
                 ) {
-                    Text("저장")
-                }
-            },
-            dismissButton = {
-                Button(
-                    onClick = { showEditDialog = false }
-                ) {
-                    Text("취소")
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "다짐 수정",
+                        tint = Color.Gray
+                    )
                 }
             }
-        )
+        }
+
+        if (showEditDialog) {
+
+            // ⭐ 다이얼로그가 뜨는 순간 포커스 요청
+            LaunchedEffect(showEditDialog) {
+                focusRequester.requestFocus()
+            }
+
+            AlertDialog(
+                onDismissRequest = { showEditDialog = false },
+                title = { Text("오늘의 다짐 수정") },
+                text = {
+                    TextField(
+                        value = editingText,
+                        onValueChange = { editingText = it },
+                        placeholder = { Text("오늘의 다짐 한 마디") },
+                        singleLine = true,
+                        modifier = Modifier.focusRequester(focusRequester)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            pledgeText = editingText.text
+                            showEditDialog = false
+                        }
+                    ) {
+                        Text("저장")
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { showEditDialog = false }
+                    ) {
+                        Text("취소")
+                    }
+                }
+            )
+        }
     }
-}
+
 
 
